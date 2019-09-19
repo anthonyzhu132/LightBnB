@@ -15,7 +15,7 @@ const pool = new Pool({
  * @param {String} email The email of the user.
  * @return {Promise<{}>} A promise to the user.
  */
-const getUserWithEmail = function(email) {
+const getUserWithEmail = function (email) {
   return pool.query(`
   SELECT *
   FROM users
@@ -32,7 +32,7 @@ exports.getUserWithEmail = getUserWithEmail;
  * @param {string} id The id of the user.
  * @return {Promise<{}>} A promise to the user.
  */
-const getUserWithId = function(id) {
+const getUserWithId = function (id) {
   return pool.query(`
   SELECT *
   FROM users
@@ -50,7 +50,7 @@ exports.getUserWithId = getUserWithId;
  * @param {{name: string, password: string, email: string}} user
  * @return {Promise<{}>} A promise to the user.
  */
-const addUser =  function(user) {
+const addUser = function (user) {
   return pool.query(`
   INSERT INTO users (name, email, password)
   VALUES ($1, $2, $3)
@@ -69,9 +69,26 @@ exports.addUser = addUser;
  * @param {string} guest_id The id of the user.
  * @return {Promise<[{}]>} A promise to the reservations.
  */
-const getAllReservations = function(guest_id, limit = 10) {
-  return getAllProperties(null, 2);
-}
+const getAllReservations = function (guest_id, limit = 10) {
+  return pool.query(`
+  SELECT properties.*, res.*, avg(rating)
+  FROM properties
+  INNER JOIN property_reviews AS reviews
+  ON reviews.property_id = properties.id
+  INNER JOIN reservations AS res
+  ON res.property_id = reviews.property_id
+  INNER JOIN users
+  ON reviews.guest_id = users.id
+  WHERE res.guest_id = $1
+  AND end_date < now()::date
+  GROUP BY properties.id, res.id
+  ORDER BY start_date 
+  LIMIT $2
+  `, [guest_id, limit])
+    .then(response => {
+      return response.rows;
+    }).catch(error => console.log(error.stack));
+};
 exports.getAllReservations = getAllReservations;
 
 /// Properties
@@ -82,12 +99,14 @@ exports.getAllReservations = getAllReservations;
  * @param {*} limit The number of results to return.
  * @return {Promise<[{}]>}  A promise to the properties.
  */
-const getAllProperties = function(options, limit = 10) {
+const getAllProperties = function (options, limit = 10) {
   return pool.query(`
   SELECT * FROM properties
   LIMIT $1
   `, [limit])
-    .then(res => res.rows);
+    .then(response => {
+      return response.rows;
+    });
 };
 
 exports.getAllProperties = getAllProperties;
@@ -98,7 +117,7 @@ exports.getAllProperties = getAllProperties;
  * @param {{}} property An object containing all of the property details.
  * @return {Promise<{}>} A promise to the property.
  */
-const addProperty = function(property) {
+const addProperty = function (property) {
   const propertyId = Object.keys(properties).length + 1;
   property.id = propertyId;
   properties[propertyId] = property;
